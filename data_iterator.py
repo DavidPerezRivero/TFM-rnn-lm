@@ -23,9 +23,15 @@ def create_padded_batch(state, x):
     X = numpy.zeros((mx, n), dtype='int32')
     Xmask = numpy.zeros((mx, n), dtype='float32') 
 
+    # Variables to store last utterance (for computing mutual information metric)
+    X_last_utterance = numpy.zeros((mx, n), dtype='int32')
+    Xmask_last_utterance = numpy.zeros((mx, n), dtype='float32')
+    X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
+
     # Fill X and Xmask
     # Keep track of number of predictions and maximum triple length
     num_preds = 0
+    num_preds_last_utterance = 0
     max_length = 0
     for idx in xrange(len(x[0])):
         # Insert sequence idx in a column of matrix X
@@ -47,9 +53,35 @@ def create_padded_batch(state, x):
         # Initialize Xmask column with ones in all positions that
         # were just set in X
         Xmask[:sent_length, idx] = 1.
+
+        sos_indices = numpy.where(X[:, idx] == state['sos_sym'])[0]
+        eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
+
+        # Find start of last utterance and store the utterance
+        assert (len(eos_indices) >= len(sos_indices))
+
+        if len(sos_indices) > 0: # Check that dialogue is not empty
+            start_of_last_utterance = sos_indices[-1]
+        else: # If it is empty, then we define last utterance to start at the beginning
+            start_of_last_utterance = 0
+
+        num_preds_last_utterance += sent_length - start_of_last_utterance
+
+        X_start_of_last_utterance[idx] = start_of_last_utterance
+        X_last_utterance[0:(sent_length-start_of_last_utterance), idx] = X[start_of_last_utterance:sent_length, idx]
+        Xmask_last_utterance[0:(sent_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:sent_length, idx]
      
+
     assert num_preds == numpy.sum(Xmask)
-    return {'x': X, 'x_mask': Xmask, 'num_preds': num_preds, 'max_length': max_length}
+    return {'x': X,                                                 \
+            'x_mask': Xmask,                                        \
+            'num_preds': num_preds,                                 \
+            'x_last_utterance': X_last_utterance,                   \
+            'x_mask_last_utterance': Xmask_last_utterance,          \
+            'x_start_of_last_utterance': X_start_of_last_utterance, \
+            'num_preds_ast_utterance': num_preds_last_utterance,    \
+            'num_triples': len(x[0]),                               \
+            'max_length': max_length}
 
 def get_batch_iterator(rng, state):
     class Iterator(SSIterator):

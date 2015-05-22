@@ -94,6 +94,9 @@ def main(args):
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
     logger.debug("Compile trainer")
     logger.debug(str(timings)) 
+ 
+    if args.force_train_all_wordemb == True:
+        state['fix_pretrained_word_embeddings'] = False
     
     rng = numpy.random.RandomState(state['seed'])
     model = RecurrentLM(rng, state)
@@ -189,7 +192,7 @@ def main(args):
                     x_cost_mask = batch['x_mask']
                     max_length = batch['max_length']
 
-                    pc = eval_batch(x_data, max_length, x_cost_mask)
+                    pc, _ = eval_batch(x_data, max_length, x_cost_mask)
                     if numpy.isinf(pc) or numpy.isnan(pc):
                         continue
                     
@@ -224,6 +227,7 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
+    parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the incoming (encoder) connection. This switch can be used to fine-tune a model which was trained with fixed (pretrained) word embeddings.")
     parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_web')
 
     args = parser.parse_args()

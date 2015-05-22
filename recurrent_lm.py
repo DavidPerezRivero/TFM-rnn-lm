@@ -52,7 +52,26 @@ class LanguageModel(ComponentBase):
         ###################
         # RECURRENT WEIGHTS
         ###################
-        self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+
+        # Build word embeddings, which are shared throughout the model
+        if self.initialize_from_pretrained_word_embeddings:
+            # Load pretrained word embeddings from pickled file
+            logger.debug("Loading pretrained word embeddings")
+            pretrained_embeddings = cPickle.load(open(self.pretrained_word_embeddings_file, 'r'))
+
+            # Check all dimensions match from the pretrained embeddings
+            print 'pretrained_embeddings[0].shape', pretrained_embeddings[0].shape
+            assert(self.idim == pretrained_embeddings[0].shape[0])
+            assert(self.rankdim == pretrained_embeddings[0].shape[1])
+            assert(self.idim == pretrained_embeddings[1].shape[0])
+            assert(self.rankdim == pretrained_embeddings[1].shape[1])
+
+            self.W_emb_pretrained_mask = theano.shared(pretrained_embeddings[1].astype(numpy.float32), name='W_emb_mask')
+            self.W_emb = add_to_params(self.params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
+        else:
+            # Initialize word embeddings randomly
+            self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+
         self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'))
         self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'))
         self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'))
@@ -160,7 +179,7 @@ class LanguageModel(ComponentBase):
             
         if mode == LanguageModel.EVALUATION:
             target_probs = GrabProbs(outputs, y)
-            return target_probs, h
+            return target_probs, h, outputs
         # BEAM_SEARCH : Return output (the softmax layer) + the new hidden states
         elif mode == LanguageModel.BEAM_SEARCH:
             return outputs, h
@@ -277,6 +296,14 @@ class RecurrentLM(Model):
             clip_grads.append((p, T.switch(notfinite, numpy.float32(.1) * p, g * normalization)))
         grads = OrderedDict(clip_grads)
 
+        if self.initialize_from_pretrained_word_embeddings and self.fix_pretrained_word_embeddings:
+            # Keep pretrained word embeddings fixed
+            logger.debug("Will use mask to fix pretrained word embeddings")
+            grads[self.language_model.W_emb] = grads[self.language_model.W_emb] * self.language_model.W_emb_pretrained_mask
+
+        else:
+            logger.debug("Will train all word embeddings")
+
         if self.updater == 'adagrad':
             updates = Adagrad(grads, self.lr)  
         elif self.updater == 'sgd':
@@ -295,9 +322,9 @@ class RecurrentLM(Model):
         if not hasattr(self, 'train_fn'):
             # Compile functions
             logger.debug("Building train function")
-            model_updates = self.compute_updates(self.prediction_cost / self.x_data.shape[1], self.params)
+            model_updates = self.compute_updates(self.softmax_cost_acc / self.x_data.shape[1], self.params)
             self.train_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask],
-                                            outputs=self.prediction_cost, updates=model_updates, name="train_fn") 
+                                            outputs=self.softmax_cost_acc, updates=model_updates, name="train_fn") 
         return self.train_fn
 
     def build_eval_function(self):
@@ -305,8 +332,20 @@ class RecurrentLM(Model):
             # Compile functions
             logger.debug("Building evaluation function")
             self.eval_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask], 
-                                            outputs=self.prediction_cost, name="eval_fn")
+                                            outputs=[self.softmax_cost_acc, self.softmax_cost], name="eval_fn")
         return self.eval_fn
+
+    def build_eval_misclassification_function(self):
+        if not hasattr(self, 'eval_misclass_fn'):
+            # Compile functions
+            logger.debug("Building misclassification evaluation function")
+            self.eval_misclass_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask], 
+                                            outputs=self.prediction_misclassification, name="eval_misclass_fn",
+                                            on_unused_input='ignore')
+
+        return self.eval_misclass_fn
+
+
 
     def build_sampling_function(self):
         if not hasattr(self, 'sample_fn'):
@@ -363,12 +402,19 @@ class RecurrentLM(Model):
         self.training_y = self.aug_x_data[1:self.x_max_length+1]
         self.training_x_cost_mask = self.x_cost_mask[:self.x_max_length].flatten()
          
-        target_probs, self.eval_h = self.language_model.build_lm(self.training_x, 
+        target_probs, self.eval_h, target_probs_full_matrix = self.language_model.build_lm(self.training_x, 
                                                     y=self.training_y, 
                                                     mode=LanguageModel.EVALUATION)
 
         # Prediction cost
-        self.prediction_cost = T.sum(-T.log(target_probs) * self.training_x_cost_mask) 
+
+        #self.prediction_cost = T.sum(-T.log(target_probs) * self.training_x_cost_mask) 
+        self.softmax_cost = -T.log(target_probs) * self.training_x_cost_mask
+        self.softmax_cost_acc = T.sum(self.softmax_cost)
+
+        # Prediction accuracy
+        self.prediction_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask)
+
         
         # Sampling variables
         self.n_samples = T.iscalar("n_samples")

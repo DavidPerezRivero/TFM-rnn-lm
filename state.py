@@ -94,8 +94,7 @@ def prototype_test():
     #
     state['qdim'] = 5
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 5
-    # 
+    state['rankdim'] = 10
 
     state['bs'] = 10
     state['seqlen'] = 50
