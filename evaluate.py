@@ -11,6 +11,7 @@ import traceback
 import logging
 import time
 import sys
+import signal
 
 import os
 import numpy
@@ -51,6 +52,17 @@ def parse_args():
   
     return parser.parse_args()
 
+def load(model, filename):
+    print "Loading the model..."
+
+    # ignore keyboard interrupt while saving
+    start = time.time()
+    s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    model.load(filename)
+    signal.signal(signal.SIGINT, s)
+
+    print "Model loaded, took {}".format(time.time() - start)
+
 def main():
     args = parse_args()
     state = prototype_state()
@@ -66,10 +78,8 @@ def main():
     rng = numpy.random.RandomState(state['seed'])
     model = RecurrentLM(rng, state)
     if os.path.isfile(model_path):
-        filename = model_path + '_model.npz'
-        if os.path.isfile(filename):
-            logger.debug("Loading previous model")
-            load(model, filename)
+        logger.debug("Loading previous model")
+        load(model, model_path)
     else:
         raise Exception("Must specify a valid model path")
     
