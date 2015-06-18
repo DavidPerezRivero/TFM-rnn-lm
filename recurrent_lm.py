@@ -264,11 +264,11 @@ class LanguageModel(ComponentBase):
         self.init_params()
 
 class RecurrentLM(Model):
-    def indices_to_words(self, seq):
+    def indices_to_words(self, seq, stop_at_eos = True):
         sen = []
         for k in range(len(seq)):
             sen.append(self.idx_to_str[seq[k]])
-            if seq[k] == self.eos_sym:
+            if (seq[k] == self.eos_sym) and stop_at_eos:
                 break
         return ' '.join(sen)
 
@@ -340,7 +340,7 @@ class RecurrentLM(Model):
             # Compile functions
             logger.debug("Building misclassification evaluation function")
             self.eval_misclass_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask], 
-                                            outputs=self.prediction_misclassification, name="eval_misclass_fn",
+                                            outputs=[self.prediction_misclassification_acc, self.prediction_misclassification], name="eval_misclass_fn",
                                             on_unused_input='ignore')
 
         return self.eval_misclass_fn
@@ -364,9 +364,16 @@ class RecurrentLM(Model):
     
     def __init__(self, rng, state):
         Model.__init__(self)    
+
+        # Compatibility towards older models
+        if not 'initialize_from_pretrained_word_embeddings' in state:
+            state['initialize_from_pretrained_word_embeddings'] = False
+
+
+
         self.state = state
          
-        # Compatibility towards older models
+
         self.__dict__.update(state)
         self.rng = rng 
 
@@ -413,7 +420,10 @@ class RecurrentLM(Model):
         self.softmax_cost_acc = T.sum(self.softmax_cost)
 
         # Prediction accuracy
-        self.prediction_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask)
+        self.prediction_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask
+        self.prediction_misclassification_acc = T.sum(self.prediction_misclassification)
+
+        #self.prediction_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask)
 
         
         # Sampling variables
