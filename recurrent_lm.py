@@ -2,7 +2,7 @@
 General class for a recurrent language model
 """
 __docformat__ = 'restructedtext en'
-__authors__ = ("Alessandro Sordoni")
+__authors__ = ("Alessandro Sordoni, Iulian Vlad Serban")
 __contact__ = "Alessandro Sordoni <sordonia@iro.umontreal>"
 
 import theano
@@ -361,7 +361,15 @@ class RecurrentLM(Model):
                                                  outputs=[outputs, h],
                                                  name="next_probs_fn")
         return self.next_probs_fn
-    
+
+    def build_encoder_function(self):
+        if not hasattr(self, 'encoder_fn'):
+            _, h, _ = self.language_model.build_lm(self.training_x, y=self.training_y, mode=LanguageModel.EVALUATION, prev_h=self.beam_h)
+            self.encoder_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.beam_h], outputs=h, \
+                                              on_unused_input='warn', name="encoder_fn")
+
+        return self.encoder_fn
+
     def __init__(self, rng, state):
         Model.__init__(self)    
 
@@ -422,9 +430,6 @@ class RecurrentLM(Model):
         # Prediction accuracy
         self.prediction_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask
         self.prediction_misclassification_acc = T.sum(self.prediction_misclassification)
-
-        #self.prediction_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * self.training_x_cost_mask)
-
         
         # Sampling variables
         self.n_samples = T.iscalar("n_samples")
