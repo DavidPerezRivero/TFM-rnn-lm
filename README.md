@@ -1,7 +1,6 @@
 # RNN-LM
 
 Standard Recurrent Language Model.
-	<p> Introduccion TO_DO</p>
 
 ## Instrucciones
 
