@@ -75,3 +75,4 @@ Standard Recurrent Language Model.
 	- **RUN_ID_lm_train_model.npz:** Modelo.
 	- **RUN_ID_lm_train_state.pkl:** Estado.
 	- **RUN_ID_lm_train_timing.npz:** Tiempo.
+# TFM-rnn-lm
