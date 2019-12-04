@@ -45,7 +45,7 @@ def parse_args():
 
     parser.add_argument("output",
             help="Output file")
-    
+
     parser.add_argument("--beam_search",
                         action="store_true",
                         help="Use beam search instead of random search")
@@ -81,10 +81,10 @@ def main():
 
     logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
-    #model = DialogEncoderDecoder(state) 
+    #model = DialogEncoderDecoder(state)
     rng = numpy.random.RandomState(state['seed'])
     model = RecurrentLM(rng, state)
-    
+
     sampler = search.RandomSampler(model)
     if args.beam_search:
         sampler = search.BeamSampler(model)
@@ -94,18 +94,18 @@ def main():
         model.load(model_path)
     else:
         raise Exception("Must specify a valid model path")
-    
+
     contexts = [[]]
     lines = open(args.context, "r").readlines()
     if len(lines):
         contexts = [x.strip().split('\t') for x in lines]
-    
+
     context_samples, context_costs = sampler.sample(contexts,
                                             n_samples=args.n_samples,
                                             n_turns=args.n_turns,
                                             ignore_unk=args.ignore_unk,
                                             verbose=args.verbose)
-     
+
     # Write to output file
     output_handle = open(args.output, "w")
     for context_sample in context_samples:
@@ -114,4 +114,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

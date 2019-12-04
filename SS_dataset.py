@@ -21,36 +21,36 @@ class SSFetcher(threading.Thread):
     def run(self):
         diter = self.parent
         self.parent.rng.shuffle(self.indexes)
-        
-        offset = 0 
+
+        offset = 0
         # Take groups of 10000 triples and group by length
         while not diter.exit_flag:
             last_batch = False
             triples = []
-             
-            while len(triples) < diter.batch_size:        
+
+            while len(triples) < diter.batch_size:
                 if offset == diter.data_len:
                     if not diter.use_infinite_loop:
                         last_batch = True
                         break
                     else:
                         # Infinite loop here, we reshuffle the indexes
-                        # and reset the offset 
+                        # and reset the offset
                         np.random.shuffle(self.indexes)
                         offset = 0
-                
+
                 index = self.indexes[offset]
                 s = diter.data[index]
                 offset += 1
-                
-                if len(s) > diter.max_len: 
+
+                if len(s) > diter.max_len:
                     continue
 
                 triples.append(s)
 
             if len(triples):
                 diter.queue.put(triples)
-            
+
             if last_batch:
                 diter.queue.put(None)
                 return
@@ -78,8 +78,8 @@ class SSIterator(object):
     def load_files(self):
         self.data = cPickle.load(open(self.triple_file, 'r'))
         self.data_len = len(self.data)
-        logger.debug('Data len is %d' % self.data_len) 
-    
+        logger.debug('Data len is %d' % self.data_len)
+
     def start(self):
         self.exit_flag = False
         self.queue = Queue.Queue(maxsize=self.queue_size)
@@ -106,15 +106,15 @@ class SSIterator(object):
 if __name__ == '__main__':
     """ debug """
     import sys
-    
+
     iterator = SSIterator(100, triple_file=sys.argv[1], use_infinite_loop=False)
     iterator.start()
-    
+
     _cpt = 0
     while True:
         batch = iterator.next()
         if batch is None:
             break
         _cpt += 1
-     
+
     print "Read %d batches" % _cpt

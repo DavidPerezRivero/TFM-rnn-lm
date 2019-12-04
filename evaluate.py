@@ -20,7 +20,7 @@ import math
 
 from recurrent_lm import *
 from numpy_compat import argpartition
-from state import * 
+from state import *
 from data_iterator import *
 
 import matplotlib
@@ -34,10 +34,10 @@ stopwords = "all another any anybody anyone anything both each each other either
 
 def parse_args():
     parser = argparse.ArgumentParser("Sample (with beam-search) from the session model")
-    
+
     parser.add_argument("model_prefix",
             help="Path to the model prefix (without _model.npz or _state.pkl)")
-    
+
     parser.add_argument("test_path",
             type=str, help="File of test data")
 
@@ -69,19 +69,20 @@ def load(model, filename):
 def main():
     args = parse_args()
     state = prototype_state()
-   
+    #state = prototype_train()
+
     state_path = args.model_prefix + "_state.pkl"
     model_path = args.model_prefix + "_model.npz"
 
     with open(state_path) as src:
-        state.update(cPickle.load(src)) 
-    
+        state.update(cPickle.load(src))
+
     logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
     # This is a hack: we replace the validation set with the test set
     state['valid_triples'] = args.test_path
     state['valid_sentences'] = args.test_path
-     
+
     rng = numpy.random.RandomState(state['seed'])
     model = RecurrentLM(rng, state)
     if os.path.isfile(model_path):
@@ -89,7 +90,7 @@ def main():
         load(model, model_path)
     else:
         raise Exception("Must specify a valid model path")
-    
+
     eval_batch = model.build_eval_function()
     eval_misclass_batch = model.build_eval_misclassification_function()
 
@@ -122,7 +123,7 @@ def main():
         print 'Warning no file with document ids given... standard deviations cannot be computed.'
         document_ids = numpy.zeros((test_data.data_len), dtype='int32')
         unique_document_ids = numpy.unique(document_ids)
-    
+
     # Variables to store test statistics
     test_cost = 0
     test_cost_first_utterances = 0
@@ -156,14 +157,14 @@ def main():
     test_highest_costs = numpy.ones((test_extrema_setsize,))*(-1000)
     test_highest_triples = numpy.ones((test_extrema_setsize,state['seqlen']))*(-1000)
 
-    logger.debug("[TEST START]") 
+    logger.debug("[TEST START]")
 
     while True:
         batch = test_data.next()
         # Train finished
         if not batch:
             break
-         
+
         logger.debug("[TEST] - Got batch %d,%d" % (batch['x'].shape[1], batch['max_length']))
 
         x_data = batch['x']
@@ -181,20 +182,20 @@ def main():
         batch['num_preds'] = numpy.sum(x_cost_mask)
 
         c, c_list = eval_batch(x_data, max_length, x_cost_mask)
-        
+
         c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
         c_list = numpy.sum(c_list, axis=1)
 
         non_nan_entries = numpy.array(c_list >= 0, dtype=int)
         c_list[numpy.where(non_nan_entries==0)] = 0
-        
+
         #words_in_triples = numpy.sum(x_cost_mask, axis=0)
         #c_list = c_list / words_in_triples
-        
+
 
         if numpy.isinf(c) or numpy.isnan(c):
             continue
-        
+
         test_cost += c
 
         # Store test costs in list
@@ -211,7 +212,7 @@ def main():
         #test_cost_list[(nxt-triples_in_batch):nxt] = numpy.exp(c_list[0:triples_in_batch])
         test_cost_list[(nxt-triples_in_batch):nxt] = c_list[0:triples_in_batch]
 
-        # Store best and worst test costs        
+        # Store best and worst test costs
         con_costs = numpy.concatenate([test_lowest_costs, c_list[0:triples_in_batch]])
         con_triples = numpy.concatenate([test_lowest_triples, x_data[:, 0:triples_in_batch].T], axis=0)
         con_indices = con_costs.argsort()[0:test_extrema_setsize][::1]
@@ -302,8 +303,8 @@ def main():
         test_wordpreds_done += batch['num_preds']
         test_wordpreds_done_last_utterance += batch['num_preds_at_utterance']
         test_triples_done += batch['num_triples']
-     
-    logger.debug("[TEST END]") 
+
+    logger.debug("[TEST END]")
 
     test_cost_last_utterance_marginal /= test_wordpreds_done_last_utterance
     test_cost_last_utterance = (test_cost - test_cost_first_utterances) / test_wordpreds_done_last_utterance
@@ -330,12 +331,12 @@ def main():
     # Print 5 of 10% test samples with highest log-likelihood
     # TODO: There is a problem in printing the words. The extra white spacing should be removed...
     if args.plot_graphs:
-        print " highest word log-likelihood test samples: " 
+        print " highest word log-likelihood test samples: "
         numpy.random.shuffle(test_lowest_triples)
         for i in range(test_extrema_samples_to_print):
             print "      Sample: {}".format(" ".join(model.indices_to_words(numpy.ravel(test_lowest_triples[i,:]))))
 
-        print " lowest word log-likelihood test samples: " 
+        print " lowest word log-likelihood test samples: "
         numpy.random.shuffle(test_highest_triples)
         for i in range(test_extrema_samples_to_print):
             print "      Sample: {}".format(" ".join(model.indices_to_words(numpy.ravel(test_highest_triples[i,:]))))
@@ -347,7 +348,7 @@ def main():
             pylab.figure()
             bins = range(0, 100, 1)
             pylab.hist(test_pmi_list, normed=1, histtype='bar')
-            pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Test_PMI.png')
+            pylab.savefig("tests" + '/' + 'Test_PMI.png')
         except:
             pass
 

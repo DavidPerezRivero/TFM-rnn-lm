@@ -61,7 +61,7 @@ def Adadelta(grads, decay=0.95, epsilon=1e-6):
 
         # Compute update
         rms_dx_tm1 = T.sqrt(mean_square_dx + epsilon)
-        rms_grad_t = T.sqrt(new_mean_squared_grad + epsilon) 
+        rms_grad_t = T.sqrt(new_mean_squared_grad + epsilon)
         delta_x_t = - rms_dx_tm1 / rms_grad_t * grads[param]
 
         # Accumulate updates
@@ -77,10 +77,10 @@ def Adadelta(grads, decay=0.95, epsilon=1e-6):
 
     return updates
 
-def RMSProp(grads, lr, decay=0.95, eta=0.9, epsilon=1e-6): 
-    """ 
+def RMSProp(grads, lr, decay=0.95, eta=0.9, epsilon=1e-6):
+    """
     RMSProp gradient method
-    """ 
+    """
     updates = OrderedDict()
     for param in grads.keys():
         # mean_squared_grad := E[g^2]_{t-1}
@@ -90,17 +90,17 @@ def RMSProp(grads, lr, decay=0.95, eta=0.9, epsilon=1e-6):
 
         if param.name is None:
             raise ValueError("Model parameters must be named.")
-        
+
         mean_square_grad.name = 'mean_square_grad_' + param.name
-        
+
         # Accumulate gradient
-        
+
         new_mean_grad = (decay * mean_grad + (1 - decay) * grads[param])
         new_mean_squared_grad = (decay * mean_square_grad + (1 - decay) * T.sqr(grads[param]))
 
-        # Compute update 
+        # Compute update
         scaled_grad = grads[param] / T.sqrt(new_mean_squared_grad - new_mean_grad ** 2 + epsilon)
-        new_delta_grad = eta * delta_grad - lr * scaled_grad 
+        new_delta_grad = eta * delta_grad - lr * scaled_grad
 
         # Apply update
         updates[delta_grad] = new_delta_grad
@@ -108,7 +108,7 @@ def RMSProp(grads, lr, decay=0.95, eta=0.9, epsilon=1e-6):
         updates[mean_square_grad] = new_mean_squared_grad
         updates[param] = param + new_delta_grad
 
-    return updates 
+    return updates
 
 class Maxout(object):
     def __init__(self, maxout_part):
@@ -131,9 +131,9 @@ class Maxout(object):
 def UniformInit(rng, sizeX, sizeY, lb=-0.01, ub=0.01):
     """ Uniform Init """
     return rng.uniform(size=(sizeX, sizeY), low=lb, high=ub).astype(theano.config.floatX)
- 
+
 def OrthogonalInit(rng, sizeX, sizeY, sparsity=-1, scale=1):
-    """ 
+    """
     Orthogonal Initialization
     """
 
@@ -162,34 +162,34 @@ def GrabProbs(classProbs, target, gRange=None):
         classProbs = classProbs.reshape((classProbs.shape[0] * classProbs.shape[1], classProbs.shape[2]))
     else:
         classProbs = classProbs
-    
+
     if target.ndim > 1:
         tflat = target.flatten()
     else:
-        tflat = target 
+        tflat = target
     return T.diag(classProbs.T[tflat])
 
 def NormalInit(rng, sizeX, sizeY, scale=0.01, sparsity=-1):
-    """ 
+    """
     Normal Initialization
     """
 
     sizeX = int(sizeX)
     sizeY = int(sizeY)
-    
+
     if sparsity < 0:
         sparsity = sizeY
-     
+
     sparsity = numpy.minimum(sizeY, sparsity)
     values = numpy.zeros((sizeX, sizeY), dtype=theano.config.floatX)
     for dx in xrange(sizeX):
         perm = rng.permutation(sizeY)
         new_vals = rng.normal(loc=0, scale=scale, size=(sparsity,))
         values[dx, perm[:sparsity]] = new_vals
-        
+
     return values.astype(theano.config.floatX)
 
-def ConvertTimedelta(seconds_diff): 
+def ConvertTimedelta(seconds_diff):
     hours = seconds_diff // 3600
     minutes = (seconds_diff % 3600) // 60
     seconds = (seconds_diff % 60)

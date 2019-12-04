@@ -41,16 +41,22 @@ timings["valid_cost"] = []
 
 def save(model):
     print "Saving the model..."
-
     # ignore keyboard interrupt while saving
     start = time.time()
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    
-    model.save(model.state['save_dir'] + '/' + RUN_ID + "_" + model.state['prefix'] + 'model.npz')
-    cPickle.dump(model.state, open(model.state['save_dir'] + '/' +  RUN_ID + "_" + model.state['prefix'] + 'state.pkl', 'w'))
-    numpy.savez(model.state['save_dir'] + '/' + RUN_ID + "_" + model.state['prefix'] + 'timing.npz', **timings)
+
+    # model.save(model.state['save_dir'] + '/' + RUN_ID + "_" + model.state['prefix'] + 'model.npz')
+    #cPickle.dump(model.state, open(model.state['save_dir'] + '/' +  RUN_ID + "_" + model.state['prefix'] + 'state.pkl', 'w'))
+    #numpy.savez(model.state['save_dir'] + '/' + RUN_ID + "_" + model.state['prefix'] + 'timing.npz', **timings)
+    #signal.signal(signal.SIGINT, s)
+    #print("Model " + RUN_ID)
+
+    ruta = model.state['save_dir'] + '/' + model.state['prefix']
+    model.save(ruta + 'model.npz')
+    cPickle.dump(model.state, open(ruta + 'state.pkl', 'w'))
+    numpy.savez(ruta + 'timing.npz', **timings)
     signal.signal(signal.SIGINT, s)
-    
+    print("Model " + RUN_ID)
     print "Model saved, took {}".format(time.time() - start)
 
 def load(model, filename):
@@ -64,43 +70,43 @@ def load(model, filename):
 
     print "Model loaded, took {}".format(time.time() - start)
 
-def main(args):     
+def main(args):
     global timings
-    state = eval(args.prototype)() 
+    state = eval(args.prototype)()
 
     logging.basicConfig(level=getattr(logging, state['level']), \
                         format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
     state['model_id'] = RUN_ID
-    state['prefix'] = "lm_" + state['prefix']
-    
+    state['prefix'] = state['prefix']
+
     if args.resume != "":
         logger.debug("Resuming %s" % args.resume)
-        
+
         state_file = args.resume + '_state.pkl'
         timings_file = args.resume + '_timing.npz'
-        
+
         if os.path.isfile(state_file):
             logger.debug("Loading previous state")
-            
+
             state = cPickle.load(open(state_file, 'r'))
             timings = dict(numpy.load(open(timings_file, 'r')))
             timings['train_cost'] = list(timings['train_cost'])
             timings['valid_cost'] = list(timings['valid_cost'])
         else:
             raise Exception("Cannot resume, cannot find files!")
-    
+
     logger.debug("State:\n{}".format(pprint.pformat(state)))
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
     logger.debug("Compile trainer")
-    logger.debug(str(timings)) 
- 
+    logger.debug(str(timings))
+
     if args.force_train_all_wordemb == True:
         state['fix_pretrained_word_embeddings'] = False
-    
+
     rng = numpy.random.RandomState(state['seed'])
     model = RecurrentLM(rng, state)
-    
+
     train_batch = model.build_train_function()
     eval_batch = model.build_eval_function()
     sample = model.build_sampling_function()
@@ -119,41 +125,41 @@ def main(args):
 
     # Start looping through the dataset
     step = 0
-    patience = state['patience'] 
+    patience = state['patience']
     start_time = time.time()
-     
+
     old_valid_cost = 1e21
     train_cost = 0
     train_done = 0
     ex_done = 0
-     
+
     while (step < state['loopIters'] and
             (time.time() - start_time)/60. < state['timeStop'] and
             patience >= 0):
-        
+
         # Sample stuff
         if step % 200 == 0:
             for param in model.params:
                 print "%s = %.4f" % (param.name, numpy.sum(param.get_value() ** 2) ** 0.5)
-             
+
             samples, log_probs = sample(1, 40)
             print "Sampled : {}".format(model.indices_to_words(numpy.ravel(samples)))
-         
-        # Training phase
-        batch = train_data.next() 
+
+        batch = train_data.next()
         # Train finished
         if not batch:
             # Restart training
             logger.debug("Got None...")
             break
-        
+
         logger.debug("[TRAIN] - Got batch %d,%d" % (batch['x'].shape[1], batch['max_length']))
-        
+
         x_data = batch['x']
         x_cost_mask = batch['x_mask']
         max_length = batch['max_length']
 
         c = train_batch(x_data, max_length, x_cost_mask)
+
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
             continue
@@ -170,24 +176,24 @@ def main(args):
                                                                              step, \
                                                                              batch['x'].shape[1], \
                                                                              batch['max_length'], \
-                                                                             float(train_cost/train_done))        
+                                                                             float(train_cost/train_done))
         if valid_data is not None and\
             step % state['validFreq'] == 0 and\
                 step > 1:
-                
+
                 valid_data.start()
                 valid_cost = 0
                 valid_done = 0
-                
-                logger.debug("[VALIDATION START]") 
+
+                logger.debug("[VALIDATION START]")
                 while True:
                     batch = valid_data.next()
                     # Train finished
                     if not batch:
                         break
-                     
+
                     logger.debug("[VALID] - Got batch %d,%d" % (batch['x'].shape[1], batch['max_length']))
-        
+
                     x_data = batch['x']
                     x_cost_mask = batch['x_mask']
                     max_length = batch['max_length']
@@ -195,12 +201,12 @@ def main(args):
                     pc, _ = eval_batch(x_data, max_length, x_cost_mask)
                     if numpy.isinf(pc) or numpy.isnan(pc):
                         continue
-                    
+
                     valid_cost += pc
                     valid_done += batch['num_preds']
-                 
-                logger.debug("[VALIDATION END]") 
-                 
+
+                logger.debug("[VALIDATION END]")
+
                 valid_cost /= valid_done
 
                 if valid_cost >= old_valid_cost * state['cost_threshold']:
@@ -210,25 +216,25 @@ def main(args):
                     old_valid_cost = valid_cost
                     # Saving model if decrease in validation cost
                     save(model)
-                
+
                 print "** validation error = %.4f, patience = %d" % (float(valid_cost), patience)
-                
+
                 timings["train_cost"].append(train_cost/train_done)
                 timings["valid_cost"].append(valid_cost)
-                
+
                 # Reset train cost and train done
                 train_cost = 0
                 train_done = 0
-        
-        step += 1
 
+        step += 1
+    #save(model)
     logger.debug("All done, exiting...")
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
     parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the incoming (encoder) connection. This switch can be used to fine-tune a model which was trained with fixed (pretrained) word embeddings.")
-    parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_web')
+    parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_train')
 
     args = parser.parse_args()
     return args

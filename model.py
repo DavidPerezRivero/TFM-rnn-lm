@@ -8,7 +8,7 @@ class Model(object):
         self.floatX = theano.config.floatX
         # Parameters of the model
         self.params = []
-    
+
     def save(self, filename):
         """
         Save the model to file `filename`
